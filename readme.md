@@ -88,43 +88,86 @@ This process yielded **100,000 audio segments** for training.
 
 ### Loss Function Design
 
-The loss function is critical to performance. I designed a composite loss consisting of three parts: token count loss, timestamp regression loss, and blank loss:
+The loss function plays a crucial role in this model, as it significantly impacts performance. I designed a composite loss consisting of three components: **Token Count Loss**, **Timestamp Regression Loss**, and **Blank Loss**. The overall formula is:
 
 $$
 \mathcal{L} = \lambda_{\mathrm{count}} \ell_{\mathrm{count}} + \lambda_{\mathrm{time}} \ell_{\mathrm{time}} + \lambda_{\mathrm{blank}} \ell_{\mathrm{blank}}
 $$
 
-* \$\lambda\_{\mathrm{count}}\$, \$\lambda\_{\mathrm{time}}\$, and \$\lambda\_{\mathrm{blank}}\$ are weighting factors.
+where:
+
+* \$\lambda\_{\mathrm{count}}\$, \$\lambda\_{\mathrm{time}}\$, and \$\lambda\_{\mathrm{blank}}\$ are the weighting coefficients for Token Count Loss, Timestamp Regression Loss, and Blank Loss, respectively.
+
+---
 
 #### Token Count Loss
 
-Ensures the model predicts the number of tokens in a segment:
+To enable the model to predict the number of tokens in an audio segment, I designed a Token Count Loss. Its formulation is:
 
 $$
 \ell_{\mathrm{count}} = \frac{1}{B} \sum_{i=1}^B \mathrm{Smooth}_{L_1}(C_i, c_i)
 $$
 
-where \$C\_i = \sum\_{t=1}^T \alpha\_{i,t}\$ is the predicted token count, and \$c\_i\$ is the ground truth.
+where:
+
+* \$B\$ is the batch size;
+* \$C\_i = \sum\_{t=1}^T \alpha\_{i,t}\$ is the predicted total token count for the \$i\$-th sample;
+* \$c\_i\$ is the ground-truth token count (true\_counts) for the \$i\$-th sample.
+
+---
 
 #### Timestamp Regression Loss
 
-Trains the model to predict per-token timestamps:
+To train the model to predict the timestamps of each token within a segment, I designed a Timestamp Regression Loss:
 
 $$
 \ell_{\mathrm{time}} = \frac{1}{|\{i:c_i>0\}|} \sum_{i:c_i>0} \mathrm{Smooth}_{L_1}(\hat\tau_{i}, \tau_{i})
 $$
 
-where \$\hat\tau\_{i}\$ is the predicted timestamp sequence computed via attention weighting, and \$\tau\_{i}\$ is the ground truth sequence.
+where:
+
+* \${i\:c\_i>0}\$ denotes the subset of samples with token counts greater than 0;
+* \$\hat\tau\_{i}\$ is the predicted frame index list for the \$i\$-th sample, with each element \$\hat\tau\_{i,u}\$ computed as:
+
+$$
+\hat\tau_{i,u} = \sum_{t=1}^T w_{i,u,t} \cdot t
+$$
+
+* \$w\_{i,u,t}\$ is the attention weight, defined as:
+
+$$
+w_{i,u,t} = \frac{\exp(f_{i,u,t})}{\sum_{t'=1}^T \exp(f_{i,u,t'})}
+$$
+
+* \$f\_{i,u,t}\$ is the offset penalty, computed as:
+
+$$
+f_{i,u,t} = -\beta_1|A_{i,t} - u| - \beta_2 \max(A_{i,t} - u, 0)
+$$
+
+* \$A\_{i,t} = \sum\_{k=1}^t \alpha\_{i,k}\$ is the temporal integration of \$\alpha\$;
+* \$u\$ ranges from \$1\$ to \$c\_i\$, where \$c\_i\$ is the ground-truth token count for the \$i\$-th sample;
+* \$\tau\_{i} = (\tau\_{i,1}, \dots, \tau\_{i,C\_i})\$ is the ground-truth frame index list for the \$i\$-th sample.
+
+---
 
 #### Blank Loss
 
-Encourages the model to output near-zero alphas for blank frames (e.g., background noise):
+To prevent the model from producing excessive signal values in blank frames (e.g., silence or background noise), I designed a Blank Loss:
 
 $$
 \ell_{\mathrm{blank}} = \frac{1}{B} \sum_{i=1}^B \sum_{t=1}^T \alpha_{i,t} \cdot m_{i,t}
 $$
 
-where \$m\_{i,t}\$ is a mask set to 1 if the frame is blank, else 0.
+where:
+
+* \$m\_{i,t}\$ is the blank frame mask, defined as:
+
+$$
+m_{i,t} = \mathbf{1}\{l_{i,t} = 0\}
+$$
+
+* \$l\_{i,t}\$ is the label in the label sequence, with \$0\$ indicating a blank frame.
 
 ---
 
