@@ -1,0 +1,2 @@
+# Whisper_encoder_cif
+This repository contains an implementation of a Whisper encoder with a Continuous Integrate-and-Fire (CIF) mechanism for speech recognition tasks. The CIF mechanism allows for efficient and effective processing of variable-length input sequences, making it suitable for real-time applications.
